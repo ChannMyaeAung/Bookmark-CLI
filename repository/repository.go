@@ -77,7 +77,29 @@ func CreateBookmark(db *sql.DB, userID int, title, url string) (*Bookmark, error
 	// fetch created_at
 	err = db.QueryRow("SELECT created_at FROM bookmarks WHERE id = ?", id).Scan(&bm.CreatedAt)
 	if err != nil {
-		return bm, nil
+		// if we can't get the timestamp, it's better to return the error
+		// than a partially populated object.
+		return nil, err
 	}
 	return bm, nil
+}
+
+// ListBookmarks retrieves all bookmarks for a user
+func ListBookmarks(db *sql.DB, userID int) ([]*Bookmark, error) {
+	rows, err := db.Query("SELECT id, title, url, created_at FROM bookmarks WHERE user_id = ?", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*Bookmark
+	for rows.Next() {
+		var bm Bookmark
+		bm.UserID = userID
+		if err := rows.Scan(&bm.ID, &bm.Title, &bm.URL, &bm.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &bm)
+	}
+	return list, nil
 }

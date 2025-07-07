@@ -66,7 +66,7 @@ func main() {
 		fmt.Println("could not create user.", err)
 		return
 	}
-	fmt.Printf("Welcome %s! Your user ID is %d\n", user.Name, user.ID)
+	fmt.Printf("Welcome %s! Your user ID is %d. Save this ID to fetch your saved bookmarks later.\n", user.Name, user.ID)
 
 	// keep asking for bookmarks until the user decides to stop
 	for {
@@ -95,5 +95,38 @@ func main() {
 			continue
 		}
 		fmt.Printf("Saved: %s\n", bm.Title)
+	}
+
+	for {
+		fmt.Print("Do you want to fetch your bookmarks? (y/n): ")
+		ans, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			return
+		}
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		if ans != "y" {
+			break
+		}
+		fmt.Print("Enter your user ID to fetch your bookmarks: ")
+		var userID int
+		_, err = fmt.Scanf("%d", &userID)
+		if err != nil {
+			fmt.Println("Invalid user ID. Please enter a valid number.")
+			continue
+		}
+		fmt.Println("\nYour bookmarks:")
+		bms, err := repository.ListBookmarks(database, userID)
+		if err != nil {
+			fmt.Println("could not retrieve bookmarks:", err)
+			continue
+		}
+		if len(bms) == 0 {
+			fmt.Println("Empty. You haven't added any bookmarks yet.")
+		}
+		for _, bm := range bms {
+			fmt.Printf("Title: %s, URL: %s, Created At: %s\n", bm.Title, bm.URL, bm.CreatedAt)
+		}
+		break
 	}
 }
