@@ -5,6 +5,7 @@ import (
 	"bookmark-cli/repository"
 	"bookmark-cli/utils"
 	"bufio"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -28,105 +29,66 @@ func main() {
 	}
 	defer database.Close()
 
-	// prompt for user name
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter your name: ")
-	name, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Println("Error reading input:", err)
-		return
-	}
-	name = strings.TrimSpace(name)
-
-	// prompt for email until a valid one is entered
+	var user *repository.User
 	var email string
+
+	// Ask for email first
 	for {
 		fmt.Print("Enter your email: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading input:", err)
-			return
-		}
-		input = strings.TrimSpace(input)
+		email, _ = reader.ReadString('\n')
+		email = strings.TrimSpace(email)
 
-		if !utils.ValidateEmail(input) {
-			fmt.Println("Invalid email format. Try again.")
+		if !utils.ValidateEmail(email) {
+			fmt.Println("Invalid email format.")
 			continue
 		}
-		email = input
 		break
 	}
 
-	// create a new user in the database
-	user, err := repository.CreateUser(database, name, email)
-	if err == repository.ErrEmailTaken {
-		fmt.Println("That email is already taken. Please try another one.")
-		return
-	} else if err != nil {
-		fmt.Println("could not create user.", err)
-		return
-	}
-	fmt.Printf("Welcome %s! Your user ID is %d. Save this ID to fetch your saved bookmarks later.\n", user.Name, user.ID)
+	// Check if user exists
+	user, err = repository.GetUserByEmail(database, email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// User does not exist, proceed to create a new user
+			fmt.Println("Welcome! Let's create your account.")
+			fmt.Print("Enter your name: ")
+			name, _ := reader.ReadString('\n')
+			name = strings.TrimSpace(name)
 
-	// keep asking for bookmarks until the user decides to stop
-	for {
-		fmt.Printf("Add a bookmark? (y/n): ")
-		ans, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading input:", err)
+			user, err = repository.CreateUser(database, name, email)
+			if err != nil {
+				fmt.Printf("Could not create user: %v\n", err)
+				return
+			}
+			fmt.Printf("Account created for %s. Your user ID is %d. Save this ID to fetch your saved bookmarks later.\n", user.Name, user.ID)
+		} else {
+			// Another database error occurred
+			fmt.Printf("Error retrieving user: %v\n", err)
 			return
 		}
-		ans = strings.ToLower(strings.TrimSpace(ans))
-		if ans != "y" {
-			break
-		}
-
-		fmt.Print("Title: ")
-		title, _ := reader.ReadString('\n')
-		title = strings.TrimSpace(title)
-
-		fmt.Print("URL: ")
-		url, _ := reader.ReadString('\n')
-		url = strings.TrimSpace(url)
-
-		bm, err := repository.CreateBookmark(database, user.ID, title, url)
-		if err != nil {
-			fmt.Println("could not save bookmark: ", err)
-			continue
-		}
-		fmt.Printf("Saved: %s\n", bm.Title)
+	} else {
+		// user exists
+		fmt.Printf("Welcome back, %s! Your user ID is %d.\n", user.Name, user.ID)
 	}
 
+	// Main application loop
 	for {
-		fmt.Print("Do you want to fetch your bookmarks? (y/n): ")
-		ans, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading input:", err)
+		fmt.Print("\nWhat would you like to do?\n (1) Add a bookmark\n (2) List my bookmarks\n (3) Exit\n")
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			repository.AddBookmark(database, reader, user.ID)
+		case "2":
+			repository.ListBookmarks(database, user.ID)
+		case "3":
+			fmt.Println("Goodbye!")
 			return
+		default:
+			fmt.Println("Invalid choice. Please enter 1, 2, or 3.")
 		}
-		ans = strings.ToLower(strings.TrimSpace(ans))
-		if ans != "y" {
-			break
-		}
-		fmt.Print("Enter your user ID to fetch your bookmarks: ")
-		var userID int
-		_, err = fmt.Scanf("%d", &userID)
-		if err != nil {
-			fmt.Println("Invalid user ID. Please enter a valid number.")
-			continue
-		}
-		fmt.Println("\nYour bookmarks:")
-		bms, err := repository.ListBookmarks(database, userID)
-		if err != nil {
-			fmt.Println("could not retrieve bookmarks:", err)
-			continue
-		}
-		if len(bms) == 0 {
-			fmt.Println("Empty. You haven't added any bookmarks yet.")
-		}
-		for _, bm := range bms {
-			fmt.Printf("Title: %s, URL: %s, Created At: %s\n", bm.Title, bm.URL, bm.CreatedAt)
-		}
-		break
 	}
+
 }

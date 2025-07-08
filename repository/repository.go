@@ -1,8 +1,11 @@
 package repository
 
 import (
+	"bufio"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -84,8 +87,30 @@ func CreateBookmark(db *sql.DB, userID int, title, url string) (*Bookmark, error
 	return bm, nil
 }
 
-// ListBookmarks retrieves all bookmarks for a user
-func ListBookmarks(db *sql.DB, userID int) ([]*Bookmark, error) {
+// Helper func to add a bookmark.
+func AddBookmark(db *sql.DB, reader *bufio.Reader, userID int) {
+	fmt.Print("Title: ")
+	title, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading title:", err)
+		return
+	}
+	title = strings.TrimSpace(title)
+
+	fmt.Print("URL: ")
+	url, _ := reader.ReadString('\n')
+	url = strings.TrimSpace(url)
+
+	bm, err := CreateBookmark(db, userID, title, url)
+	if err != nil {
+		fmt.Println("could not save bookmark: ", err)
+		return
+	}
+	fmt.Printf("Saved: %s\n", bm.Title)
+}
+
+// FetchBookmarks retrieves all bookmarks for a user
+func FetchBookmarks(db *sql.DB, userID int) ([]*Bookmark, error) {
 	rows, err := db.Query("SELECT id, title, url, created_at FROM bookmarks WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
@@ -102,4 +127,37 @@ func ListBookmarks(db *sql.DB, userID int) ([]*Bookmark, error) {
 		list = append(list, &bm)
 	}
 	return list, nil
+}
+
+// Helper func to list bookmarks.
+func ListBookmarks(db *sql.DB, userID int) {
+	bms, err := FetchBookmarks(db, userID)
+	if err != nil {
+		fmt.Println("could not retrieve bookmarks:", err)
+		return
+	}
+
+	if len(bms) == 0 {
+		fmt.Println("Empty. You haven't added any bookmarks yet.")
+		return
+	}
+
+	fmt.Println("\n--- Your bookmarks ---")
+	for _, bm := range bms {
+		fmt.Printf("\nTitle: %s\nURL: %s\nCreated At: %s\n", bm.Title, bm.URL, bm.CreatedAt.Format(time.RFC3339))
+	}
+}
+
+// GetUserByEmail retrieves a user by their email address.
+// It returns sql.ErrNoRows if no user is found.
+func GetUserByEmail(db *sql.DB, email string) (*User, error) {
+	user := &User{Email: email}
+
+	// since emails are unique, we only want one user, QueryRow is appropriate.
+	// db.Query for multiple rows.
+	err := db.QueryRow("SELECT id, name FROM users WHERE email = ?", email).Scan(&user.ID, &user.Name)
+	if err != nil {
+		return nil, err // sql.ErrNoRows is returned if no user is found
+	}
+	return user, nil
 }
