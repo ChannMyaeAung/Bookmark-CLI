@@ -74,7 +74,7 @@ func main() {
 
 	// Main application loop
 	for {
-		fmt.Print("\nWhat would you like to do?\n (1) Add a bookmark\n (2) List my bookmarks\n (3) Exit\n")
+		fmt.Print("\nWhat would you like to do?\n (1) Add a bookmark\n (2) List my bookmarks\n (3) Delete a bookmark\n (4) Delete account\n (5) Exit\n ")
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
@@ -84,10 +84,17 @@ func main() {
 		case "2":
 			repository.ListBookmarks(database, user.ID)
 		case "3":
+			repository.DeleteBookmark(database, reader, user.ID)
+		case "4":
+			if repository.DeleteAccount(database, reader, user) {
+				fmt.Println("Your account has been deleted successfully. Goodbye!")
+				return // exit the application after account deletion
+			}
+		case "5":
 			fmt.Println("Goodbye!")
 			return
 		default:
-			fmt.Println("Invalid choice. Please enter 1, 2, or 3.")
+			fmt.Println("Invalid choice. Please enter 1, 2, 3, 4 or 5.")
 		}
 	}
 
